@@ -62,15 +62,15 @@ All calls live in `abra.mjs`:
 
 - `abra --root R daemon --yes` starts the per-player daemon.
 - `status`, `pair ticket`, `pair add`, and `peers` provide identity and mutual trust.
-- `init <game>` creates the workspace capsule; `lease take <capsule>` grants the local turn owner authorship.
-- `snapshot <game> -m "move N: e2e4"` records the complete workspace and state.
+- `init <game>` creates the workspace capsule; its ID remains constant for the whole game.
+- On every move, `lease take <capsule>` transfers authorship to the current mover, then `snapshot <game> -m "move N: e2e4"` records the complete workspace on the adopted `main` head.
 - `send <peer> --capsule <capsule>` sends the full capsule head.
 - `outbox` is checked until the matching entry is `acked`, meaning the receiver durably committed it.
 - `watch --json` is the long-lived event stream that wakes the waiting player; there is no app polling loop for incoming moves.
 - `log --capsule <id>` resolves the received full-capsule head. Full snapshots intentionally do not appear in `inbox`.
-- `accept <snapshot> --to <empty-dir>` materializes the app, after which `.abra/recipes.json` is read and its argv/cwd/env/port recipe is run.
+- `accept <snapshot> --to <empty-dir>` materializes the app, restores `.abra/capsule_id`, and adopts the propagated signed `main` pointer; `.abra/recipes.json` then supplies the argv/cwd/env/port recipe to run.
 
-The HTTP server never calls a remote host. It only validates moves and atomically writes `game.json`; the orchestrator notices the local move signal and invokes the CLI sequence above.
+The HTTP server never calls a remote host. It only validates moves and atomically writes `game.json`; the orchestrator notices the local move signal and performs the native round-trip: lease take → snapshot on adopted `main` → send → ack → park. The receiver accepts that head, thereby adopting `main`, and repeats the same cycle on its turn.
 
 ## Responsibilities
 
@@ -83,11 +83,7 @@ The HTTP server never calls a remote host. It only validates moves and atomicall
 | Lease records | Move → teleport orchestration |
 | Durable outbox acknowledgement | Recipe runner and waiting presentation |
 
-## Current Abra 0.1 limitation found
-
-The current CLI durably transfers and materializes a full capsule snapshot, but `accept` does not restore `.abra/capsule_id`, and the receiver's capsule store does not advance the `main` label. Consequently, the new owner cannot immediately author the next snapshot: `abra snapshot` first reports a missing marker and then, if the marker is restored, `capsule already has a root snapshot`.
-
-Blink Chess keeps this compatibility handling isolated in `teleport.mjs`: it restores the marker after accept and, when the missing remote label blocks authorship, uses the public `abra init` command to re-root the landed workspace before sending. `game.json` retains the complete move history, and the end-to-end teleport remains real, but capsule-DAG continuity across alternating authors is not yet preserved. Abra's backlog item is: **full capsule receive/accept must install the workspace binding and synchronize the head label so the receiver can snapshot the same capsule.** Remove the compatibility branch when that lands.
+Abra's native full-snapshot round-trip now restores the workspace capsule binding and propagates the signed `main` pointer with lease ancestry. This removed Blink Chess's earlier marker-restoration and `abra init` re-root workarounds: alternating authors now extend one linear capsule DAG directly.
 
 ## Project layout
 
