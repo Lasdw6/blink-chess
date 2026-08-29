@@ -1,0 +1,11 @@
+{
+  "name": "blink-chess",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "blink": "./blink.mjs" },
+  "scripts": {
+    "test": "node --test",
+    "demo": "bash scripts/demo.sh"
+  }
+}

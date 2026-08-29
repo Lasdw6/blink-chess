@@ -1,0 +1,14 @@
+{
+  "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  "turn": "w",
+  "moves": [],
+  "clocks": {
+    "w": { "remainingMs": 600000, "startedAt": null },
+    "b": { "remainingMs": 600000, "startedAt": null }
+  },
+  "status": "waiting",
+  "players": { "white": null, "black": null },
+  "capsuleId": null,
+  "lastMove": null,
+  "updatedAt": null
+}
