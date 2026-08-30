@@ -21,7 +21,12 @@ export async function outbox(root){return run(root,['outbox']);}
 export async function inbox(root){return run(root,['inbox']);}
 export async function accept(root,snapshotId,to){return run(root,['accept',snapshotId,'--to',to]);}
 export async function log(root,capsuleId){return run(root,['log','--capsule',capsuleId]);}
+export async function logAny(root){return run(root,['log']);}
 export async function leaseStatus(root,capsuleId){return run(root,['lease','status',capsuleId]);}
 export async function leaseTake(root,capsuleId){return run(root,['lease','take',capsuleId]);}
-export async function* watch(root,{signal}={}){const bin=await abraBin(),child=spawn(bin,['--root',root,'--json','watch'],{stdio:['ignore','pipe','pipe'],signal});let buffer='',stderr='';child.stderr.on('data',c=>stderr+=c);try{for await(const chunk of child.stdout){buffer+=chunk;let nl;while((nl=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,nl).trim();buffer=buffer.slice(nl+1);if(line)yield JSON.parse(line);}}if(buffer.trim())yield JSON.parse(buffer);}finally{if(!child.killed)child.kill();}if(stderr)throw new Error(stderr.trim());}
+export async function* watch(root,{signal}={}){const bin=await abraBin(),child=spawn(bin,['--root',root,'--json','watch'],{stdio:['ignore','pipe','pipe'],signal});let buffer='',stderr='';child.stderr.on('data',c=>stderr+=c);
+  // Aborting the signal kills the child, which emits ABORT_ERR on the child's
+  // 'error' event; without a handler that crashes the process. Swallow aborts.
+  child.on('error',e=>{if(e?.code!=='ABORT_ERR')throw e;});
+  try{for await(const chunk of child.stdout){buffer+=chunk;let nl;while((nl=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,nl).trim();buffer=buffer.slice(nl+1);if(line)yield JSON.parse(line);}}if(buffer.trim())yield JSON.parse(buffer);}catch(e){if(e?.code!=='ABORT_ERR')throw e;}finally{if(!child.killed)child.kill();}if(stderr&&!signal?.aborted)throw new Error(stderr.trim());}
 export async function waitForAck(root,sendResult,{timeoutMs=30000}={}){const deadline=Date.now()+timeoutMs,id=sendResult?.id||sendResult?.outbox_id||sendResult?.snapshot_id;while(Date.now()<deadline){const box=await outbox(root),entries=Array.isArray(box)?box:(box?.entries||box?.outbox||[]);const item=id?entries.find(x=>x.id===id||x.snapshot_id===id):entries.at(-1);if(item?.state==='acked')return item;if(item?.state==='failed')throw new Error(item.error||'Abra send failed');await new Promise(r=>setTimeout(r,150));}throw new Error('Timed out waiting for Abra durable acknowledgement');}
